@@ -1,11 +1,13 @@
 // smartptr.cpp
-// Compact tutorial demonstrating std::unique_ptr, std::shared_ptr and std::weak_ptr
+// Modern C++ Smart Pointers Tutorial with Advanced Features
 // Build with: g++ -std=c++17 smartptr.cpp -o smartptr
 
 #include <iostream>
 #include <memory>
 #include <vector>
 #include <string>
+#include <array>
+#include <functional>
 
 using namespace std;
 
@@ -117,12 +119,60 @@ void weakPtrExample() {
     if (wp.expired()) cout << "weak_ptr is expired after sp.reset()\n";
 }
 
+// --- ADVANCED C++ FEATURES ---
+
+// 1. Perfect Forwarding Factory (Modern C++ pattern)
+template<typename T, typename... Args>
+unique_ptr<T> makeWidget(Args&&... args) {
+    // forward preserves lvalue/rvalue-ness of arguments
+    return make_unique<T>(forward<Args>(args)...);
+}
+
+// 2. enable_shared_from_this - get shared_ptr from 'this'
+struct Component : enable_shared_from_this<Component> {
+    int id;
+    Component(int i) : id(i) { cout << "Component(" << id << ") created\n"; }
+    ~Component() { cout << "Component(" << id << ") destroyed\n"; }
+    
+    // Can safely return shared_ptr to self
+    shared_ptr<Component> getPtr() { return shared_from_this(); }
+};
+
+void advancedFeatures() {
+    cout << "\n--- Advanced Modern C++ Features ---\n";
+    
+    // Perfect forwarding with temporary string
+    auto w1 = makeWidget<Widget>(100, "forwarded");
+    w1->greet();
+    
+    // enable_shared_from_this usage
+    auto comp = make_shared<Component>(200);
+    auto ptr = comp->getPtr(); // safe self-reference
+    cout << "use_count via shared_from_this: " << ptr.use_count() << "\n";
+    
+    // 3. Aliasing constructor - shared_ptr to member
+    auto widget = make_shared<Widget>(300, "alias-test");
+    shared_ptr<int> idPtr(widget, &widget->id); // shares ownership but points to id
+    cout << "Aliased id: " << *idPtr << " (use_count=" << idPtr.use_count() << ")\n";
+    
+    // 4. Array support (C++17+)
+    shared_ptr<Widget[]> arr(new Widget[2]{{400, "arr[0]"}, {401, "arr[1]"}});
+    arr[0].greet();
+    arr[1].greet();
+    cout << "Array will auto-delete[] on destruction\n";
+    
+    // 5. Custom allocator (allocate_shared for efficiency)
+    auto w2 = allocate_shared<Widget>(allocator<Widget>(), 500, "allocated");
+    cout << "allocate_shared reduces allocations vs make_shared\n";
+}
+
 int main() {
     uniquePtrExample();
     sharedPtrExample();
     weakPtrExample();
     cycleDemo();
+    advancedFeatures();
 
-    cout << "\nProgram end. If any destructor messages are missing for the shared_ptr cycle, that's the point of the demo.\n";
+    cout << "\n=== All examples complete ===\n";
     return 0;
 }

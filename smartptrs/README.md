@@ -1,22 +1,34 @@
-# smartptr.cpp — Smart pointer tutorial
+# Smart Pointers Tutorial
 
-This is a compact C++ tutorial demonstrating std::unique_ptr, std::shared_ptr and std::weak_ptr.
+Concise, runnable examples of Modern C++ smart pointers with advanced features.
 
-What you'll learn:
-- Creating and transferring ownership with `std::unique_ptr`.
-- Sharing ownership with `std::shared_ptr` and checking `use_count()`.
-- Using `std::weak_ptr` to observe an object without owning it and breaking reference cycles.
-- A small demo showing how a cycle of `shared_ptr` prevents destruction and how `weak_ptr` fixes it.
+## Features Covered
 
-Build and run (on Windows with g++/MinGW or WSL bash):
+### Basic Smart Pointers
+- **unique_ptr**: Exclusive ownership, move semantics, custom deleters
+- **shared_ptr**: Shared ownership, reference counting
+- **weak_ptr**: Non-owning observer, cycle breaking
+
+### Advanced C++17+ Features
+- **Perfect Forwarding**: Template factory with `std::forward`
+- **enable_shared_from_this**: Safe self-referencing
+- **Aliasing Constructor**: shared_ptr to member with shared ownership
+- **Array Support**: `shared_ptr<T[]>` with automatic `delete[]`
+- **Custom Allocators**: `allocate_shared` for efficiency
+- **Cycle Demo**: Memory leak prevention with weak_ptr
+
+## Build & Run
 
 ```bash
 g++ -std=c++17 smartptr.cpp -o smartptr
 ./smartptr
 ```
 
-Notes:
-- The program prints construction/destruction messages to show when objects are freed.
-- The shared_ptr cycle demo intentionally creates a reference cycle to illustrate leaking behavior (destructors for those objects won't run).
+## Key Takeaways
 
-Feel free to tweak the code in `smartptr.cpp` to try more variations.
+1. **Use `make_unique`/`make_shared`** for exception safety
+2. **unique_ptr** for single ownership (move-only)
+3. **shared_ptr** when multiple owners needed (watch cycles!)
+4. **weak_ptr** to break cycles and observe without owning
+5. **Perfect forwarding** enables efficient generic factories
+6. **enable_shared_from_this** prevents dangling pointers from `this`
