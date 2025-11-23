@@ -8,6 +8,8 @@
 #include <string>
 #include <array>
 #include <functional>
+#include <algorithm> // for remove_if
+#include <cstdio>    // for FILE, fopen, fclose, fprintf
 
 using namespace std;
 
@@ -166,12 +168,108 @@ void advancedFeatures() {
     cout << "allocate_shared reduces allocations vs make_shared\n";
 }
 
+// 6. Observer Pattern with weak_ptr (prevents memory leaks)
+class Subject {
+    vector<weak_ptr<Widget>> observers;
+public:
+    void attach(shared_ptr<Widget> obs) {
+        observers.push_back(obs); // store weak_ptr, doesn't affect lifetime
+        cout << "Observer attached. Total: " << observers.size() << '\n';
+    }
+    
+    void notify() {
+        cout << "Notifying observers...\n";
+        // Remove expired weak_ptrs while notifying
+        observers.erase(
+            remove_if(observers.begin(), observers.end(),
+                [](const weak_ptr<Widget>& wp) {
+                    if (auto sp = wp.lock()) {
+                        sp->greet(); // notify if still alive
+                        return false;
+                    }
+                    return true; // remove expired
+                }),
+            observers.end()
+        );
+    }
+};
+
+void observerPatternExample() {
+    cout << "\n--- Observer Pattern with weak_ptr ---\n";
+    Subject subject;
+    
+    auto obs1 = make_shared<Widget>(600, "observer1");
+    auto obs2 = make_shared<Widget>(601, "observer2");
+    
+    subject.attach(obs1);
+    subject.attach(obs2);
+    subject.notify();
+    
+    obs1.reset(); // observer1 destroyed
+    cout << "obs1 destroyed, notifying again:\n";
+    subject.notify(); // only obs2 notified
+}
+
+// 7. RAII with unique_ptr for file handling
+struct FileCloser {
+    void operator()(FILE* fp) const {
+        if (fp) {
+            cout << "Closing file\n";
+            fclose(fp);
+        }
+    }
+};
+
+void raiiExample() {
+    cout << "\n--- RAII: unique_ptr for Resource Management ---\n";
+    // FILE* wrapped in unique_ptr with custom deleter
+    unique_ptr<FILE, FileCloser> file(fopen("test.txt", "w"));
+    if (file) {
+        fprintf(file.get(), "Smart pointer RAII\n");
+        cout << "File written, will auto-close on scope exit\n";
+    }
+    // file closes automatically via FileCloser
+}
+
+// 8. Move semantics: unique_ptr in vector (move-only type)
+void moveSemanticsExample() {
+    cout << "\n--- Move Semantics with unique_ptr ---\n";
+    vector<unique_ptr<Widget>> widgets;
+    
+    // Can't copy unique_ptr, must move
+    widgets.push_back(make_unique<Widget>(700, "vec[0]"));
+    widgets.push_back(make_unique<Widget>(701, "vec[1]"));
+    
+    cout << "Vector of unique_ptrs (move-only). Size: " << widgets.size() << '\n';
+    for (auto& w : widgets) w->greet();
+    
+    // Move from vector
+    auto moved = move(widgets[0]);
+    cout << "Moved widgets[0] out. Is null? " << (widgets[0] == nullptr) << '\n';
+}
+
+// 9. Polymorphic deleters with unique_ptr
+struct Base { virtual ~Base() { cout << "~Base()\n"; } };
+struct Derived : Base { ~Derived() override { cout << "~Derived()\n"; } };
+
+void polymorphicDeletionExample() {
+    cout << "\n--- Polymorphic Deletion with Smart Pointers ---\n";
+    // Virtual destructor ensures correct cleanup through base pointer
+    unique_ptr<Base> ptr = make_unique<Derived>();
+    cout << "unique_ptr<Base> holding Derived will call ~Derived then ~Base\n";
+    // Automatic cleanup calls Derived destructor first
+}
+
 int main() {
     uniquePtrExample();
     sharedPtrExample();
     weakPtrExample();
     cycleDemo();
     advancedFeatures();
+    observerPatternExample();
+    raiiExample();
+    moveSemanticsExample();
+    polymorphicDeletionExample();
 
     cout << "\n=== All examples complete ===\n";
     return 0;
