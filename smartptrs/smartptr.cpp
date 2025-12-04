@@ -1,6 +1,35 @@
-// smartptr.cpp
-// Modern C++ Smart Pointers Tutorial with Advanced Features
-// Build with: g++ -std=c++17 smartptr.cpp -o smartptr
+/*******************************************************************************
+ * smartptr.cpp
+ * Modern C++ Smart Pointers Tutorial - Complete Guide with Advanced Features
+ * 
+ * TABLE OF CONTENTS:
+ * ==================
+ * 1. Basic Smart Pointers
+ *    - unique_ptr: Exclusive ownership
+ *    - shared_ptr: Shared ownership with reference counting
+ *    - weak_ptr: Non-owning observer to break cycles
+ * 
+ * 2. Memory Management Patterns
+ *    - Cyclic reference problems and solutions
+ *    - Custom deleters for resource management
+ *    - RAII (Resource Acquisition Is Initialization)
+ * 
+ * 3. Advanced Modern C++ Features
+ *    - Perfect forwarding and variadic templates
+ *    - enable_shared_from_this pattern
+ *    - Aliasing constructor
+ *    - Observer pattern with weak_ptr
+ *    - Polymorphic deletion
+ *    - Move semantics with smart pointers
+ * 
+ * 4. Performance & Best Practices
+ *    - make_unique/make_shared vs new
+ *    - allocate_shared for custom allocators
+ *    - Common pitfalls and how to avoid them
+ * 
+ * Build: g++ -std=c++17 smartptr.cpp -o smartptr
+ * Run:   ./smartptr
+ ******************************************************************************/
 
 #include <iostream>
 #include <memory>
@@ -8,63 +37,88 @@
 #include <string>
 #include <array>
 #include <functional>
-#include <algorithm> // for remove_if
-#include <cstdio>    // for FILE, fopen, fclose, fprintf
+#include <algorithm>
+#include <cstdio>
+#include <thread>
+#include <mutex>
+#include <chrono>
 
 using namespace std;
+
+//=============================================================================
+// HELPER CLASSES FOR DEMONSTRATIONS
+//=============================================================================
 
 struct Widget {
     int id;
     string name;
+    
     Widget(int i, string n = "") : id(i), name(move(n)) {
-        cout << "Widget(" << id << ") constructed" << (name.empty() ? "" : (": " + name)) << '\n';
+        cout << "Widget(" << id << ") constructed";
+        if (!name.empty()) cout << ": " << name;
+        cout << '\n';
     }
+    
     ~Widget() {
-        cout << "Widget(" << id << ") destroyed" << (name.empty() ? "" : (": " + name)) << '\n';
+        cout << "Widget(" << id << ") destroyed";
+        if (!name.empty()) cout << ": " << name;
+        cout << '\n';
     }
-    void greet() const { cout << "Hello from Widget(" << id << ")" << (name.empty() ? "" : (": " + name)) << '\n'; }
+    
+    void greet() const { 
+        cout << "Widget(" << id << ") says hello";
+        if (!name.empty()) cout << ": " << name;
+        cout << '\n';
+    }
 };
 
-void uniquePtrExample() {
-    cout << "--- unique_ptr example ---\n";
+//=============================================================================
+// 1. BASIC SMART POINTERS
+//=============================================================================
 
-    // create a unique_ptr
-    unique_ptr<Widget> uptr = make_unique<Widget>(1, "one");
+void uniquePtrExample() {
+    cout << "\n--- unique_ptr: Exclusive Ownership ---\n";
+
+    // BEST PRACTICE: Use make_unique (exception-safe, single allocation)
+    unique_ptr<Widget> uptr = make_unique<Widget>(1, "primary");
     uptr->greet();
 
-    // transfer ownership with std::move
+    // Transfer ownership with std::move (copy constructor is deleted)
     unique_ptr<Widget> uptr2 = move(uptr);
     if (!uptr) cout << "uptr is now null after move\n";
     uptr2->greet();
 
-    // custom deleter example (lambda)
-    unique_ptr<Widget, function<void(Widget*)>> uptr3(
-        new Widget(2, "two"),
-        [](Widget* p){ cout << "Custom deleter called for "; delete p; }
+    // Custom deleter with lambda (useful for C APIs, file handles, etc.)
+    auto customDeleter = [](Widget* p) {
+        cout << "Custom deleter called for Widget(" << p->id << ")\n";
+        delete p;
+    };
+    unique_ptr<Widget, decltype(customDeleter)> uptr3(
+        new Widget(2, "custom-delete"), customDeleter
     );
     uptr3->greet();
 
-    cout << "End of unique_ptr scope: uptr2 and uptr3 will be destroyed automatically\n";
+    cout << "End of scope: uptr2 and uptr3 auto-destroyed\n";
 }
 
 void sharedPtrExample() {
-    cout << "\n--- shared_ptr example ---\n";
+    cout << "\n--- shared_ptr: Shared Ownership ---\n";
 
-    // multiple owners
-    shared_ptr<Widget> sp1 = make_shared<Widget>(3, "three");
+    // BEST PRACTICE: Use make_shared (more efficient - single allocation)
+    shared_ptr<Widget> sp1 = make_shared<Widget>(3, "shared");
     cout << "use_count after sp1 created: " << sp1.use_count() << '\n';
 
     {
-        shared_ptr<Widget> sp2 = sp1; // shared ownership
+        shared_ptr<Widget> sp2 = sp1; // Copy shares ownership
         cout << "use_count after sp2 copy: " << sp1.use_count() << '\n';
         sp2->greet();
-    }
+    } // sp2 destroyed here
 
-    cout << "use_count after sp2 goes out of scope: " << sp1.use_count() << '\n';
+    cout << "use_count after sp2 scope ends: " << sp1.use_count() << '\n';
 
-    // reset decreases count
+    // reset() decreases count and destroys if last owner
     sp1.reset();
-    cout << "sp1 reset; no owners remain -> Widget destroyed earlier if last owner exited\n";
+    cout << "sp1.reset() called - Widget destroyed\n";
 }
 
 // Simple cycle demonstration
@@ -83,50 +137,60 @@ struct NodeWeak {
 };
 
 void cycleDemo() {
-    cout << "\n--- cyclic reference demo ---\n";
+    cout << "\n--- Cyclic Reference Problem & Solution ---\n";
 
-    // Cycle with shared_ptr -> causes leak (destructors not called)
+    // PROBLEM: Cycle with shared_ptr causes memory leak
+    cout << "\nBAD: Circular shared_ptr references:\n";
     {
         auto a = make_shared<NodeShared>(10);
         auto b = make_shared<NodeShared>(20);
         a->next = b;
-        b->next = a; // cycle
-        cout << "Created cycle with shared_ptr. When this scope ends, NodeShared destructors will NOT be called because of reference cycle.\n";
+        b->next = a; // Creates cycle! use_count never reaches 0
+        cout << "Cycle created. Destructors will NOT be called!\n";
     }
-    cout << "Exited scope for shared_ptr cycle. If destructors above were not printed, objects leaked due to cycle.\n";
+    cout << "Memory leak occurred (check: no destructors above)\n";
 
-    // Fix using weak_ptr
+    // SOLUTION: Use weak_ptr to break the cycle
+    cout << "\nGOOD: Using weak_ptr breaks the cycle:\n";
     {
         auto a = make_shared<NodeWeak>(30);
         auto b = make_shared<NodeWeak>(40);
-        a->next = b;
-        b->next = a; // no cycle of strong references
-        cout << "Created links with weak_ptr; exiting scope will destroy both NodeWeak objects\n";
+        a->next = b;  // weak_ptr doesn't increase use_count
+        b->next = a;  // No strong reference cycle
+        cout << "weak_ptr used. Destructors will be called properly.\n";
     }
 }
 
 void weakPtrExample() {
-    cout << "\n--- weak_ptr example ---\n";
+    cout << "\n--- weak_ptr: Non-Owning Observer ---\n";
 
-    shared_ptr<Widget> sp = make_shared<Widget>(50, "fifty");
-    weak_ptr<Widget> wp = sp; // non-owning
-    cout << "shared use_count: " << sp.use_count() << '\n';
+    shared_ptr<Widget> sp = make_shared<Widget>(50, "observed");
+    weak_ptr<Widget> wp = sp; // Non-owning observer (doesn't affect use_count)
+    cout << "shared use_count: " << sp.use_count() << " (weak_ptr doesn't count)\n";
 
-    if (auto locked = wp.lock()) { // promote to shared_ptr
+    // Must lock() to access - promotes weak_ptr to shared_ptr temporarily
+    if (auto locked = wp.lock()) {
         cout << "Locked weak_ptr successfully. use_count: " << locked.use_count() << '\n';
         locked->greet();
-    }
+    } // locked shared_ptr destroyed here
 
-    sp.reset(); // destroy the owned Widget
-    if (wp.expired()) cout << "weak_ptr is expired after sp.reset()\n";
+    sp.reset(); // Destroy the owned Widget
+    cout << "sp.reset() called - Widget destroyed\n";
+    
+    if (wp.expired()) {
+        cout << "weak_ptr.expired() == true (object no longer exists)\n";
+    }
 }
 
-// --- ADVANCED C++ FEATURES ---
+//=============================================================================
+// 3. ADVANCED MODERN C++ FEATURES
+//=============================================================================
 
-// 1. Perfect Forwarding Factory (Modern C++ pattern)
+// Perfect Forwarding Factory (preserves value categories)
 template<typename T, typename... Args>
 unique_ptr<T> makeWidget(Args&&... args) {
-    // forward preserves lvalue/rvalue-ness of arguments
+    // forward<> preserves lvalue/rvalue-ness - enables perfect forwarding
+    // This is a common factory pattern in modern C++
     return make_unique<T>(forward<Args>(args)...);
 }
 
@@ -221,7 +285,7 @@ struct FileCloser {
 };
 
 void raiiExample() {
-    cout << "\n--- RAII: unique_ptr for Resource Management ---\n";
+    cout << "\n--- RAII with Custom Deleters ---\n";
     // FILE* wrapped in unique_ptr with custom deleter
     unique_ptr<FILE, FileCloser> file(fopen("test.txt", "w"));
     if (file) {
@@ -253,14 +317,97 @@ struct Base { virtual ~Base() { cout << "~Base()\n"; } };
 struct Derived : Base { ~Derived() override { cout << "~Derived()\n"; } };
 
 void polymorphicDeletionExample() {
-    cout << "\n--- Polymorphic Deletion with Smart Pointers ---\n";
+    cout << "\n--- Polymorphic Deletion ---\n";
     // Virtual destructor ensures correct cleanup through base pointer
     unique_ptr<Base> ptr = make_unique<Derived>();
     cout << "unique_ptr<Base> holding Derived will call ~Derived then ~Base\n";
     // Automatic cleanup calls Derived destructor first
 }
 
+//=============================================================================
+// 4. THREAD SAFETY & PERFORMANCE
+//=============================================================================
+
+// Thread-safe shared_ptr reference counting (atomic operations)
+void threadSafetyExample() {
+    cout << "\n--- Thread Safety with shared_ptr ---\n";
+    
+    auto shared = make_shared<Widget>(800, "shared-across-threads");
+    cout << "shared_ptr control block uses atomic ref counting\n";
+    
+    // Safe: copying shared_ptr across threads
+    thread t1([shared]() {
+        cout << "Thread 1: use_count = " << shared.use_count() << '\n';
+        shared->greet();
+    });
+    
+    thread t2([shared]() {
+        cout << "Thread 2: use_count = " << shared.use_count() << '\n';
+        shared->greet();
+    });
+    
+    t1.join();
+    t2.join();
+    
+    cout << "Threads finished. Final use_count: " << shared.use_count() << '\n';
+    cout << "NOTE: While ref-counting is thread-safe, the pointed-to object is NOT!\n";
+    cout << "You still need mutex/locks to protect the Widget's data members.\n";
+}
+
+//=============================================================================
+// 5. BEST PRACTICES & COMMON PITFALLS
+//=============================================================================
+
+void bestPracticesAndPitfalls() {
+    cout << "\n--- Best Practices & Common Pitfalls ---\n";
+    
+    cout << "\nBEST PRACTICES:\n";
+    cout << "  1. Prefer make_unique/make_shared over new\n";
+    cout << "     - Exception safe\n";
+    cout << "     - make_shared = 1 allocation (object + control block)\n";
+    cout << "     - Cleaner code\n\n";
+    
+    cout << "  2. Use unique_ptr by default\n";
+    cout << "     - Zero overhead when no custom deleter\n";
+    cout << "     - Clear ownership semantics\n";
+    cout << "     - Can upgrade to shared_ptr if needed\n\n";
+    
+    cout << "  3. Use weak_ptr to break cycles\n";
+    cout << "     - Parent->Child: shared_ptr\n";
+    cout << "     - Child->Parent: weak_ptr\n\n";
+    
+    cout << "  4. Pass smart pointers efficiently:\n";
+    cout << "     - By value: transfer ownership\n";
+    cout << "     - By const&: observe without copy\n";
+    cout << "     - By raw pointer/reference: just use, don't manage\n\n";
+    
+    cout << "COMMON PITFALLS:\n";
+    cout << "  - Don't create multiple shared_ptr from same raw pointer\n";
+    cout << "    Widget* raw = new Widget(1);\n";
+    cout << "    shared_ptr<Widget> sp1(raw);  // Control block 1\n";
+    cout << "    shared_ptr<Widget> sp2(raw);  // Control block 2 -> DOUBLE DELETE!\n\n";
+    
+    cout << "  - Don't use shared_ptr(this) - use enable_shared_from_this\n\n";
+    
+    cout << "  - Don't forget virtual destructors with polymorphism\n";
+    cout << "    unique_ptr<Base> p = make_unique<Derived>();\n";
+    cout << "    // Without virtual ~Base(), only ~Base() is called!\n\n";
+    
+    cout << "  - Avoid circular shared_ptr references\n";
+    cout << "    Use weak_ptr to break cycles in graphs/trees\n\n";
+    
+    cout << "PERFORMANCE TIPS:\n";
+    cout << "  - make_shared is faster (1 allocation vs 2)\n";
+    cout << "  - unique_ptr has zero overhead (when not using custom deleter)\n";
+    cout << "  - shared_ptr has atomic ref-count overhead\n";
+    cout << "  - Pass by const& to avoid ref-count changes\n";
+    cout << "  - Reserve vector<unique_ptr> capacity to avoid moves\n";
+}
+
 int main() {
+    cout << "Modern C++ Smart Pointers Tutorial\n";
+    cout << "===================================\n";
+    
     uniquePtrExample();
     sharedPtrExample();
     weakPtrExample();
@@ -270,6 +417,8 @@ int main() {
     raiiExample();
     moveSemanticsExample();
     polymorphicDeletionExample();
+    threadSafetyExample();
+    bestPracticesAndPitfalls();
 
     cout << "\n=== All examples complete ===\n";
     return 0;
