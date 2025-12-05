@@ -334,11 +334,11 @@ void observerPatternExample() {
     subject.notify(); // only obs2 notified
 }
 
-// 8. RAII with unique_ptr for file handling
+// 8. RAII with custom deleters (e.g., FILE*)
 struct FileCloser {
     void operator()(FILE* fp) const {
         if (fp) {
-            cout << "Closing file\n";
+            cout << "Closing FILE*\n";
             fclose(fp);
         }
     }
