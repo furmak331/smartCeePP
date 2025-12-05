@@ -36,6 +36,7 @@
 #include <vector>
 #include <string>
 #include <array>
+#include <map>
 #include <functional>
 #include <algorithm>
 #include <cstdio>
@@ -194,7 +195,27 @@ unique_ptr<T> makeWidget(Args&&... args) {
     return make_unique<T>(forward<Args>(args)...);
 }
 
-// 2. enable_shared_from_this - get shared_ptr from 'this'
+// Factory pattern returning polymorphic types
+struct Shape {
+    virtual ~Shape() = default;
+    virtual void draw() const = 0;
+};
+
+struct Circle : Shape {
+    void draw() const override { cout << "Drawing Circle\n"; }
+};
+
+struct Square : Shape {
+    void draw() const override { cout << "Drawing Square\n"; }
+};
+
+unique_ptr<Shape> createShape(const string& type) {
+    if (type == "circle") return make_unique<Circle>();
+    if (type == "square") return make_unique<Square>();
+    return nullptr;
+}
+
+// enable_shared_from_this - get shared_ptr from 'this'
 struct Component : enable_shared_from_this<Component> {
     int id;
     Component(int i) : id(i) { cout << "Component(" << id << ") created\n"; }
@@ -210,6 +231,12 @@ void advancedFeatures() {
     // Perfect forwarding with temporary string
     auto w1 = makeWidget<Widget>(100, "forwarded");
     w1->greet();
+    
+    // Factory pattern with polymorphic returns
+    auto shape1 = createShape("circle");
+    auto shape2 = createShape("square");
+    if (shape1) shape1->draw();
+    if (shape2) shape2->draw();
     
     // enable_shared_from_this usage
     auto comp = make_shared<Component>(200);
@@ -232,7 +259,40 @@ void advancedFeatures() {
     cout << "allocate_shared reduces allocations vs make_shared\n";
 }
 
-// 6. Observer Pattern with weak_ptr (prevents memory leaks)
+// 6. Resource cache using weak_ptr (avoids keeping objects alive)
+class ResourceCache {
+    map<string, weak_ptr<Widget>> cache;
+public:
+    shared_ptr<Widget> getOrCreate(const string& key, int id) {
+        auto it = cache.find(key);
+        if (it != cache.end()) {
+            if (auto sp = it->second.lock()) {
+                cout << "Cache hit: " << key << "\n";
+                return sp;
+            }
+        }
+        cout << "Cache miss: creating " << key << "\n";
+        auto sp = make_shared<Widget>(id, key);
+        cache[key] = sp;
+        return sp;
+    }
+};
+
+void resourceCacheExample() {
+    cout << "\n--- Resource Cache with weak_ptr ---\n";
+    ResourceCache cache;
+    
+    {
+        auto res1 = cache.getOrCreate("texture_1", 100);
+        auto res2 = cache.getOrCreate("texture_1", 100); // Cache hit
+        cout << "Both references active. use_count: " << res1.use_count() << "\n";
+    }
+    
+    // After scope, resources destroyed
+    auto res3 = cache.getOrCreate("texture_1", 100); // Cache miss (expired)
+}
+
+// 7. Observer Pattern with weak_ptr (prevents memory leaks)
 class Subject {
     vector<weak_ptr<Widget>> observers;
 public:
@@ -274,7 +334,7 @@ void observerPatternExample() {
     subject.notify(); // only obs2 notified
 }
 
-// 7. RAII with unique_ptr for file handling
+// 8. RAII with unique_ptr for file handling
 struct FileCloser {
     void operator()(FILE* fp) const {
         if (fp) {
@@ -295,7 +355,7 @@ void raiiExample() {
     // file closes automatically via FileCloser
 }
 
-// 8. Move semantics: unique_ptr in vector (move-only type)
+// 9. Move semantics: unique_ptr in vector (move-only type)
 void moveSemanticsExample() {
     cout << "\n--- Move Semantics with unique_ptr ---\n";
     vector<unique_ptr<Widget>> widgets;
@@ -312,7 +372,7 @@ void moveSemanticsExample() {
     cout << "Moved widgets[0] out. Is null? " << (widgets[0] == nullptr) << '\n';
 }
 
-// 9. Polymorphic deleters with unique_ptr
+// 10. Polymorphic deleters with unique_ptr
 struct Base { virtual ~Base() { cout << "~Base()\n"; } };
 struct Derived : Base { ~Derived() override { cout << "~Derived()\n"; } };
 
@@ -413,6 +473,7 @@ int main() {
     weakPtrExample();
     cycleDemo();
     advancedFeatures();
+    resourceCacheExample();
     observerPatternExample();
     raiiExample();
     moveSemanticsExample();
