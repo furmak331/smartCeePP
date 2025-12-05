@@ -100,6 +100,17 @@ void uniquePtrExample() {
     uptr3->greet();
 
     cout << "End of scope: uptr2 and uptr3 auto-destroyed\n";
+    
+    // reset() can replace the managed object
+    unique_ptr<Widget> uptr4 = make_unique<Widget>(3, "first");
+    uptr4.reset(new Widget(4, "replaced"));
+    
+    // swap two unique_ptrs
+    unique_ptr<Widget> uptr5 = make_unique<Widget>(5, "A");
+    unique_ptr<Widget> uptr6 = make_unique<Widget>(6, "B");
+    uptr5.swap(uptr6);
+    cout << "After swap, uptr5 points to: ";
+    uptr5->greet();
 }
 
 void sharedPtrExample() {
@@ -120,6 +131,12 @@ void sharedPtrExample() {
     // reset() decreases count and destroys if last owner
     sp1.reset();
     cout << "sp1.reset() called - Widget destroyed\n";
+    
+    // Can compare shared_ptrs
+    shared_ptr<Widget> sp3 = make_shared<Widget>(10, "compare");
+    shared_ptr<Widget> sp4 = sp3;
+    if (sp3 == sp4) cout << "sp3 and sp4 point to same object\n";
+    if (sp3 != nullptr) cout << "sp3 is not null\n";
 }
 
 // Simple cycle demonstration
@@ -181,6 +198,13 @@ void weakPtrExample() {
     if (wp.expired()) {
         cout << "weak_ptr.expired() == true (object no longer exists)\n";
     }
+    
+    // Can use get() to access raw pointer (be careful with lifetime)
+    shared_ptr<Widget> sp2 = make_shared<Widget>(60, "raw-access");
+    Widget* raw = sp2.get();
+    cout << "Raw pointer access: ";
+    raw->greet();
+    cout << "Don't delete raw pointer - smart pointer owns it!\n";
 }
 
 //=============================================================================
@@ -257,6 +281,11 @@ void advancedFeatures() {
     // 5. Custom allocator (allocate_shared for efficiency)
     auto w2 = allocate_shared<Widget>(allocator<Widget>(), 500, "allocated");
     cout << "allocate_shared reduces allocations vs make_shared\n";
+    
+    // unique_ptr can be converted to shared_ptr
+    unique_ptr<Widget> unique_w = make_unique<Widget>(600, "converted");
+    shared_ptr<Widget> shared_w = move(unique_w);
+    cout << "Converted unique_ptr to shared_ptr. use_count: " << shared_w.use_count() << "\n";
 }
 
 // 6. Resource cache using weak_ptr (avoids keeping objects alive)
