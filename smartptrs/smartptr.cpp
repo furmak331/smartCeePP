@@ -240,12 +240,7 @@ void advancedFeatures() {
     if (shape1) shape1->draw();
     if (shape2) shape2->draw();
     
-    // 3. Aliasing constructor - shared_ptr to member
-    auto widget = make_shared<Widget>(300, "alias-test");
-    shared_ptr<int> idPtr(widget, &widget->id); // shares ownership but points to id
-    cout << "Aliased id: " << *idPtr << " (use_count=" << idPtr.use_count() << ")\n";
-    
-    // 4. Array support (C++17+)
+    // Array support (C++17+)
     shared_ptr<Widget[]> arr(new Widget[2]{{400, "arr[0]"}, {401, "arr[1]"}});
     arr[0].greet();
     arr[1].greet();
