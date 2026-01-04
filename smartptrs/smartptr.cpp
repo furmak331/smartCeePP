@@ -211,14 +211,6 @@ void weakPtrExample() {
 // 3. ADVANCED MODERN C++ FEATURES
 //=============================================================================
 
-// Perfect Forwarding Factory (preserves value categories)
-template<typename T, typename... Args>
-unique_ptr<T> makeWidget(Args&&... args) {
-    // forward<> preserves lvalue/rvalue-ness - enables perfect forwarding
-    // This is a common factory pattern in modern C++
-    return make_unique<T>(forward<Args>(args)...);
-}
-
 // Factory pattern returning polymorphic types
 struct Shape {
     virtual ~Shape() = default;
@@ -251,10 +243,6 @@ struct Component : enable_shared_from_this<Component> {
 
 void advancedFeatures() {
     cout << "\n--- Advanced Modern C++ Features ---\n";
-    
-    // Perfect forwarding with temporary string
-    auto w1 = makeWidget<Widget>(100, "forwarded");
-    w1->greet();
     
     // Factory pattern with polymorphic returns
     auto shape1 = createShape("circle");
