@@ -246,10 +246,6 @@ void advancedFeatures() {
     arr[1].greet();
     cout << "Array will auto-delete[] on destruction\n";
     
-    // 5. Custom allocator (allocate_shared for efficiency)
-    auto w2 = allocate_shared<Widget>(allocator<Widget>(), 500, "allocated");
-    cout << "allocate_shared reduces allocations vs make_shared\n";
-    
     // unique_ptr can be converted to shared_ptr
     unique_ptr<Widget> unique_w = make_unique<Widget>(600, "converted");
     shared_ptr<Widget> shared_w = move(unique_w);
