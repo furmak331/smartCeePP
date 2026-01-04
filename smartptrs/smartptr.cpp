@@ -231,16 +231,6 @@ unique_ptr<Shape> createShape(const string& type) {
     return nullptr;
 }
 
-// enable_shared_from_this - get shared_ptr from 'this'
-struct Component : enable_shared_from_this<Component> {
-    int id;
-    Component(int i) : id(i) { cout << "Component(" << id << ") created\n"; }
-    ~Component() { cout << "Component(" << id << ") destroyed\n"; }
-    
-    // Can safely return shared_ptr to self
-    shared_ptr<Component> getPtr() { return shared_from_this(); }
-};
-
 void advancedFeatures() {
     cout << "\n--- Advanced Modern C++ Features ---\n";
     
@@ -249,11 +239,6 @@ void advancedFeatures() {
     auto shape2 = createShape("square");
     if (shape1) shape1->draw();
     if (shape2) shape2->draw();
-    
-    // enable_shared_from_this usage
-    auto comp = make_shared<Component>(200);
-    auto ptr = comp->getPtr(); // safe self-reference
-    cout << "use_count via shared_from_this: " << ptr.use_count() << "\n";
     
     // 3. Aliasing constructor - shared_ptr to member
     auto widget = make_shared<Widget>(300, "alias-test");
